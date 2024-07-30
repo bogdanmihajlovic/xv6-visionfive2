@@ -7,37 +7,39 @@ SECTIONS
    * ensure that entry.S / _entry is at 0x80000000,
    * where qemu's -kernel jumps.
    */
-  . = 0x80000000;
 
-  .text : {
+  .text 0x40000000  : {
     *(.text .text.*)
+    /*
     . = ALIGN(0x1000);
     _trampoline = .;
     *(trampsec)
     . = ALIGN(0x1000);
-    ASSERT(. - _trampoline == 0x1000, "error: trampoline larger than one page");
+    /* ASSERT(. - _trampoline == 0x1000, "error: trampoline larger than one page"); */
     PROVIDE(etext = .);
+    */
+    . = ALIGN(8);
   }
 
   .rodata : {
-    . = ALIGN(16);
+    . = ALIGN(8);
     *(.srodata .srodata.*) /* do not need to distinguish this from .rodata */
-    . = ALIGN(16);
     *(.rodata .rodata.*)
+    . = ALIGN(8);
   }
 
   .data : {
-    . = ALIGN(16);
+    . = ALIGN(8);
     *(.sdata .sdata.*) /* do not need to distinguish this from .data */
-    . = ALIGN(16);
     *(.data .data.*)
+    . = ALIGN(8);
   }
 
   .bss : {
-    . = ALIGN(16);
+    . = ALIGN(8);
     *(.sbss .sbss.*) /* do not need to distinguish this from .bss */
-    . = ALIGN(16);
     *(.bss .bss.*)
+    . = ALIGN(8);
   }
 
   PROVIDE(end = .);

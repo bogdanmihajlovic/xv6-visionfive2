@@ -71,7 +71,8 @@ ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]nopie'),)
 CFLAGS += -fno-pie -nopie
 endif
 
-LDFLAGS = -z max-page-size=4096
+# LDFLAGS = -z max-page-size=4096
+LDFLAGS = --gc-sections
 
 $K/kernel: $(OBJS) $K/kernel.ld $U/initcode
 	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) 
@@ -170,4 +171,12 @@ qemu: $K/kernel fs.img
 qemu-gdb: $K/kernel .gdbinit fs.img
 	@echo "*** Now run 'gdb' in another window." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
+
+
+image : $K/kernel.bin
+	go run vf2-imager/vf2-imager.go -i $K/kernel.bin -o $K/kernel.img
+
+$K/kernel.bin: $K/kernel
+	riscv64-unknown-elf-objcopy kernel/kernel -O binary kernel/kernel.bin
+
 
