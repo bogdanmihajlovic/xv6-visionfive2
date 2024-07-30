@@ -21,17 +21,17 @@
 // see http://byterunner.com/16550.html
 #define RHR 0                 // receive holding register (for input bytes)
 #define THR 0                 // transmit holding register (for output bytes)
-#define IER 1                 // interrupt enable register
+#define IER 0x04                 // interrupt enable register
 #define IER_RX_ENABLE (1<<0)
 #define IER_TX_ENABLE (1<<1)
-#define FCR 2                 // FIFO control register
+#define FCR 0x08                // FIFO control register
 #define FCR_FIFO_ENABLE (1<<0)
 #define FCR_FIFO_CLEAR (3<<1) // clear the content of the two FIFOs
-#define ISR 2                 // interrupt status register
-#define LCR 3                 // line control register
+#define ISR 0x08                 // interrupt status register
+#define LCR 0x0C                 // line control register
 #define LCR_EIGHT_BITS (3<<0)
 #define LCR_BAUD_LATCH (1<<7) // special mode to set baud rate
-#define LSR 5                 // line status register
+#define LSR 0x14                 // line status register
 #define LSR_RX_READY (1<<0)   // input is waiting to be read from RHR
 #define LSR_TX_IDLE (1<<5)    // THR can accept another character to send
 
@@ -53,27 +53,27 @@ void
 uartinit(void)
 {
   // disable interrupts.
-  WriteReg(IER, 0x00);
+  //WriteReg(IER, 0x00);
 
   // special mode to set baud rate.
-  WriteReg(LCR, LCR_BAUD_LATCH);
+  //WriteReg(LCR, LCR_BAUD_LATCH);
 
   // LSB for baud rate of 38.4K.
-  WriteReg(0, 0x03);
+  //WriteReg(0, 0x03);
 
   // MSB for baud rate of 38.4K.
-  WriteReg(1, 0x00);
+  //WriteReg(1, 0x00);
 
   // leave set-baud mode,
   // and set word length to 8 bits, no parity.
-  WriteReg(LCR, LCR_EIGHT_BITS);
+  //WriteReg(LCR, LCR_EIGHT_BITS);
 
   // reset and enable FIFOs.
-  WriteReg(FCR, FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
+  //WriteReg(FCR, FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
 
   // enable transmit and receive interrupts.
-  WriteReg(IER, IER_TX_ENABLE | IER_RX_ENABLE);
-
+  WriteReg(IER, IER_RX_ENABLE);
+  uart_tx_w = uart_tx_r = 0;
   initlock(&uart_tx_lock, "uart");
 }
 
@@ -88,21 +88,53 @@ uartputc(int c)
 {
   acquire(&uart_tx_lock);
 
-  if(panicked){
-    for(;;)
-      ;
-  }
-  while(uart_tx_w == uart_tx_r + UART_TX_BUF_SIZE){
+  // if(panicked){
+  //  for(;;)
+  //  ;
+  //}
+  while(((uart_tx_w + 1) % UART_TX_BUF_SIZE) == uart_tx_r){
+
+  //while(uart_tx_w == uart_tx_r + UART_TX_BUF_SIZE){
     // buffer is full.
     // wait for uartstart() to open up space in the buffer.
     sleep(&uart_tx_r, &uart_tx_lock);
   }
-  uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c;
-  uart_tx_w += 1;
+  uart_tx_buf[uart_tx_w] = c;
+  uart_tx_w = (uart_tx_w + 1) % UART_TX_BUF_SIZE;
   uartstart();
   release(&uart_tx_lock);
 }
+#define LSR_THR 5
+#define BASE 0x10000000
+volatile static int started = 0;
 
+
+
+static inline uint64 volatileLoad(uint64 address){
+    uint32 value;
+    asm volatile (
+        "lw %0, 0(%1)"
+        : "=r"(value)
+        : "r"(address)
+    );
+    return value;
+}
+
+static inline void volatileWrite(uint64 address, uint64 value) {
+    asm volatile (
+        "sw %0, 0(%1)"
+        :
+        : "r"(value), "r"(address)
+    );
+}
+
+static inline void tx(uint64 b){
+    
+    while(((volatileLoad(BASE + 0x14) >> LSR_THR) & 1) != 1){
+
+    }
+    volatileWrite(BASE + 0x0, b);
+}
 
 // alternate version of uartputc() that doesn't 
 // use interrupts, for use by kernel printf() and
@@ -113,10 +145,10 @@ uartputc_sync(int c)
 {
   push_off();
 
-  if(panicked){
-    for(;;)
-      ;
-  }
+  // if(panicked){
+  //    for(;;)
+  //     ;
+  // }
 
   // wait for Transmit Holding Empty to be set in LSR.
   while((ReadReg(LSR) & LSR_TX_IDLE) == 0)
@@ -146,8 +178,9 @@ uartstart()
       return;
     }
     
-    int c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];
-    uart_tx_r += 1;
+    int c = uart_tx_buf[uart_tx_r];
+    uart_tx_r = (uart_tx_r + 1) % UART_TX_BUF_SIZE;
+    
     
     // maybe uartputc() is waiting for space in the buffer.
     wakeup(&uart_tx_r);
