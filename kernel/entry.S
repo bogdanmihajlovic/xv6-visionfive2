@@ -8,9 +8,11 @@
 
 _entry:
         csrr t0, mhartid
-	li t1, 1
-	bne t0, t1, spin
-               
+	li t1, 0
+	beq t0, t1, spin
+        li t1, 4
+        bgt t0, t1, spin
+
         # set up a stack for C.
         # stack0 is declared in start.c,
         # with a 4096-byte stack per CPU.
