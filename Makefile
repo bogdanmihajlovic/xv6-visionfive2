@@ -30,6 +30,7 @@ OBJS = \
   $K/plic.o \
   $K/virtio_disk.o \
   $K/xv6_shell.o \
+  $K/user_programs.o
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -174,8 +175,11 @@ qemu-gdb: $K/kernel .gdbinit fs.img
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
 
 
-image : $K/kernel.bin
-	go run vf2-imager/vf2-imager.go -i $K/kernel.bin -o $K/kernel.img
+
+image: $(K)/kernel.bin
+	sed 's|FIRMWARE_PATH|$(K)/kernel.bin|g' visionfive2-fit/vf2-fit.its > vf2-fit-temp.its
+	mkimage -f vf2-fit-temp.its -A riscv -O u-boot -T firmware $(K)/kernel.img
+	rm vf2-fit-temp.its
 
 $K/kernel.bin: $K/kernel
 	riscv64-unknown-elf-objcopy kernel/kernel -O binary kernel/kernel.bin
